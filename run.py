@@ -40,12 +40,12 @@ class Runner:
         full_dataset = Dataset()
         train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [0.8, 0.2])
         self.train_sampler = DistributedSampler(train_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
-        self.train_loader = DataLoader(train_dataset, batch_size=10, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
+        self.train_loader = DataLoader(train_dataset, batch_size=5, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
         
         self.test_sampler = DistributedSampler(test_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
-        self.test_loader = DataLoader(test_dataset, batch_size=10, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.test_sampler, drop_last=False)
+        self.test_loader = DataLoader(test_dataset, batch_size=5, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.test_sampler, drop_last=False)
         
-        self.model = Flow(full_dataset.mean, full_dataset.std).to(self.local_rank)
+        self.model = Flow().to(self.local_rank)
         self.checkpoint_path = 'model.cpt'
             
         if os.path.exists(self.checkpoint_path) and self.checkpoint_path != None:
@@ -56,15 +56,15 @@ class Runner:
             checkpoint = None
             self.start_epoch = 0
         self.model = DDP(self.model, device_ids=[self.local_rank])
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=5e-3)
-        self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=2e-4, total_iters=1000)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+        self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=1e-7, total_iters=500)
         if checkpoint:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
         self.num_epochs = self.start_epoch+50000
         self.log_interval = 1
-        self.accum_iter = 50
+        self.accum_iter = 100
         self.eval_interval = 1
         if self.world_rank == 0:
             eprint(f"Setup done", flush=True)
