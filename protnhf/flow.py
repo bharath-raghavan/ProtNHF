@@ -1,6 +1,6 @@
 import torch
 from torch_scatter import scatter
-from nn import EmbeddingEnergy, GaussianDraw, ContinousOneHot
+from .nn import EmbeddingEnergy, GaussianDraw, ContinousOneHot
 from torch.distributions.kl import kl_divergence
 import torch.nn.functional as F
 
@@ -11,10 +11,10 @@ def batch_2d_mean(tensor_2d, batch):
     return scatter(tensor, batch, dim=0, reduce='mean')
               
 class Euler(torch.nn.Module):
-    def __init__(self, input_nf, dt):
+    def __init__(self, input_nf, dt, d_model, ff_dim, n_heads, n_layers):
         super().__init__()
         self.register_buffer('dt', torch.tensor(dt))
-        self.V = EmbeddingEnergy(input_nf)
+        self.V = EmbeddingEnergy(input_nf, d_model, ff_dim, n_heads, n_layers)
         self.register_parameter(name='a', param=torch.nn.Parameter(1*torch.eye(1)))
 
     def diff(self, y, x):
@@ -55,21 +55,21 @@ class LeapFrog(Euler):
         return p, q
                 
 class Flow(torch.nn.Module):
-    def __init__(self, n_types=20, hidden_nf=128, dt=0.1, niter=4, temperature=0.7, integrator='euler'):
+    def __init__(self, n_types, hidden_dims, dt, niter, std, integrator, transformer_d_model, transformer_ff_dim, n_transformer_heads, n_transformer_layers):
         super().__init__()
 
         self.n_types = n_types
-        self.embedd = ContinousOneHot(n_types, hidden_nf)
+        self.embedd = ContinousOneHot(n_types, hidden_dims)
         
         if integrator == 'euler':
-            self.integrator = Euler(self.n_types, dt)
+            self.integrator = Euler(self.n_types, dt, transformer_d_model, transformer_ff_dim, n_transformer_heads, n_transformer_layers)
         else:
-            self.integrator = LeapFrog(self.n_types, dt)
+            self.integrator = LeapFrog(self.n_types, dt, transformer_d_model, transformer_ff_dim, n_transformer_heads, n_transformer_layers)
         
         self.register_buffer('niter', torch.tensor(niter))
         
-        self.p_generator = GaussianDraw(self.n_types, hidden_nf)
-        self.prior = torch.distributions.Normal(0, temperature)
+        self.p_generator = GaussianDraw(self.n_types, hidden_dims)
+        self.prior = torch.distributions.Normal(0, std)
 
     def loss(self, p0, q0, log_j, batch):
         l = self.prior.log_prob(q0) + self.prior.log_prob(p0) - log_j

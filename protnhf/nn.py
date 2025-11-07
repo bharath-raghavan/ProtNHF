@@ -127,7 +127,7 @@ class EnergyHead(nn.Module):
     
                         
 class EmbeddingEnergy(nn.Module):
-    def __init__(self, n_types, d_model=256, ff_dim=1024, n_heads=8, n_layers=6):
+    def __init__(self, n_types, d_model, ff_dim, n_heads, n_layers):
         super().__init__()
                 
         self.embedding = TransformerEmbedding(n_types, d_model)

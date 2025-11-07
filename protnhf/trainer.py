@@ -5,8 +5,8 @@ import time
 import sys
 import numpy as np
 import torch
-from dataset import Dataset, DataLoader
-from flow import Flow
+from .dataset import Dataset, DataLoader
+from .flow import Flow
 
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
@@ -15,9 +15,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
                 
-class Runner:
+class DDPTrainer:
 
-    def __init__(self, world_size, world_rank, local_rank, num_cpus_per_task):
+    def __init__(self, config, world_size, world_rank, local_rank, num_cpus_per_task):
         self.world_size = int(world_size)
         self.world_rank = int(world_rank)
         self.local_rank = int(local_rank)
@@ -37,16 +37,16 @@ class Runner:
         if self.world_rank == 0:
             eprint(f"Running DDP\nInitialized? {dist.is_initialized()}", flush=True)
         
-        full_dataset = Dataset()
-        train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [0.8, 0.2])
+        full_dataset = Dataset(config.training.dataset)
+        train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, config.training.train_val_split)
         self.train_sampler = DistributedSampler(train_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
-        self.train_loader = DataLoader(train_dataset, batch_size=5, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
+        self.train_loader = DataLoader(train_dataset, batch_size=config.training.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
         
-        self.test_sampler = DistributedSampler(test_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
-        self.test_loader = DataLoader(test_dataset, batch_size=5, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.test_sampler, drop_last=False)
+        self.val_sampler = DistributedSampler(val_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
+        self.val_loader = DataLoader(val_dataset, batch_size=config.training.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.val_sampler, drop_last=False)
         
-        self.model = Flow().to(self.local_rank)
-        self.checkpoint_path = 'model.cpt'
+        self.model = config.model.get(read_cpt=False).to(self.local_rank)
+        self.checkpoint_path = config.model.checkpoint
             
         if os.path.exists(self.checkpoint_path) and self.checkpoint_path != None:
             checkpoint = torch.load(self.checkpoint_path, weights_only=False)
@@ -55,17 +55,21 @@ class Runner:
         else:
             checkpoint = None
             self.start_epoch = 0
+            
         self.model = DDP(self.model, device_ids=[self.local_rank])
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
-        self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=1e-7, total_iters=500)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.training.lr)
+        
+        scheduler_class = getattr(importlib.import_module("torch.optim.lr_scheduler"), config.training.scheduler_type)
+        self.scheduler = scheduler_class(self.optimizer, **config.training.scheduler_params)
+            
         if checkpoint:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
-        self.num_epochs = self.start_epoch+50000
-        self.log_interval = 1
-        self.accum_iter = 100
-        self.eval_interval = 1
+        self.num_epochs = self.start_epoch+config.training.num_epochs
+        self.log_interval = config.training.train_log_interval
+        self.accum_iter = config.training.accum_iter
+        self.eval_interval = config.training.eval_log_interval
         if self.world_rank == 0:
             eprint(f"Setup done", flush=True)
      
@@ -150,9 +154,9 @@ class Runner:
             
             if epoch % self.eval_interval == 0:
                 self.model.eval()
-                self.test_sampler.set_epoch(epoch)
+                self.val_sampler.set_epoch(epoch)
                 with torch.no_grad():
-                    epoch_loss, kl_p, kl_q = self.loss_per_epoch(self.test_loader, train=False)
+                    epoch_loss, kl_p, kl_q = self.loss_per_epoch(self.val_loader, train=False)
                 
                 if self.world_rank == 0:
                     eprint('%.5i \t    %.5f \t   %.4e +/- %.4e\t    %.4e +/- %.4e\t' % (epoch, epoch_loss.item(), kl_p.mean().item(), kl_p.std().item(), kl_q.mean().item(), kl_q.std().item()), flush=True)
@@ -161,6 +165,3 @@ class Runner:
        
     def __del__(self):
         dist.destroy_process_group()
-        
-hndl = Runner(world_size=os.environ.get('SLURM_NTASKS'), world_rank=os.environ.get('SLURM_PROCID'), local_rank=os.environ.get('SLURM_LOCALID'), num_cpus_per_task=os.environ.get("SLURM_CPUS_PER_TASK"))
-hndl.train()

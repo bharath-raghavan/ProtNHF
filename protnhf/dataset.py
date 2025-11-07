@@ -38,21 +38,19 @@ class DataLoader(torch.utils.data.DataLoader):
            )
                              
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self):
-        self.file = h5py.File('/lustre/orion/stf006/scratch/bharathrn/datasets/alphafold/human/dataset.h5', 'r')
+    def __init__(self, hdf5_file):
+        self.file = h5py.File(hdf5_file, 'r')
         self.len = self.file['len'][()]
         self.AA_TO_INDEX = {aa: i for i, aa in enumerate(SeqUtils.IUPACData.protein_letters_3to1.values())}
-        self.INDEX_TO_AA  = {i: aa for aa, i in self.AA_TO_INDEX.items()}
-        self.mean = torch.tensor(self.file['mean'][:])
-        self.std = torch.tensor(self.file['std'][:])
-        
+        self.INDEX_TO_AA  = {i: aa for aa, i in self.AA_TO_INDEX.items()} 
+         
     def __len__(self):
         return self.len
     
     def __getitem__(self, idx):
         row = self.file[str(idx)]
         seq = row.attrs['seq']
-        h = torch.tensor([self.AA_TO_INDEX[i] for i in seq]) #torch.tensor(row['h'][:]) #
+        h = torch.tensor([self.AA_TO_INDEX[i] for i in seq])
         
         return Data(h)
     
