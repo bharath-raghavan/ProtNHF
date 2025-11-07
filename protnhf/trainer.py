@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import timedelta
 import time
+import importlib
 import sys
 import numpy as np
 import torch
@@ -11,9 +12,6 @@ from .flow import Flow
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
                 
 class DDPTrainer:
 
@@ -35,15 +33,16 @@ class DDPTrainer:
         self.num_cpus_per_task = int(num_cpus_per_task)
         
         if self.world_rank == 0:
-            eprint(f"Running DDP\nInitialized? {dist.is_initialized()}", flush=True)
+            print(f"Running DDP\nInitialized? {dist.is_initialized()}", flush=True)
         
-        full_dataset = Dataset(config.training.dataset)
-        train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, config.training.train_val_split)
+        full_dataset = Dataset(config.training.dataset.file)
+        train_val_split = [config.training.dataset.split, 1-config.training.dataset.split]
+        train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, train_val_split)
         self.train_sampler = DistributedSampler(train_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
-        self.train_loader = DataLoader(train_dataset, batch_size=config.training.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
+        self.train_loader = DataLoader(train_dataset, batch_size=config.training.dataset.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
         
         self.val_sampler = DistributedSampler(val_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
-        self.val_loader = DataLoader(val_dataset, batch_size=config.training.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.val_sampler, drop_last=False)
+        self.val_loader = DataLoader(val_dataset, batch_size=config.training.dataset.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.val_sampler, drop_last=False)
         
         self.model = config.model.get(read_cpt=False).to(self.local_rank)
         self.checkpoint_path = config.model.checkpoint
@@ -57,22 +56,40 @@ class DDPTrainer:
             self.start_epoch = 0
             
         self.model = DDP(self.model, device_ids=[self.local_rank])
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.training.lr)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.training.lr.start)
         
-        scheduler_class = getattr(importlib.import_module("torch.optim.lr_scheduler"), config.training.scheduler_type)
-        self.scheduler = scheduler_class(self.optimizer, **config.training.scheduler_params)
+        if config.training.lr.scheduler['type'].lower() == 'linear':
+            self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=float(config.training.lr.scheduler['start_factor']),\
+                                                            end_factor=float(config.training.lr.scheduler['end_factor']), total_iters=int(config.training.lr.scheduler['total_iters']))
+        else:
+            self.scheduler = None
             
         if checkpoint:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
         self.num_epochs = self.start_epoch+config.training.num_epochs
-        self.log_interval = config.training.train_log_interval
         self.accum_iter = config.training.accum_iter
-        self.eval_interval = config.training.eval_log_interval
+        
+        self.train_log_interval = config.training.train_log.interval
+        self.eval_log_interval = config.training.eval_log.interval
+        
+        self.train_log = open(config.training.train_log.file, 'a')
+        self.eval_log = open(config.training.eval_log.file, 'a')
+        
         if self.world_rank == 0:
-            eprint(f"Setup done", flush=True)
-     
+            print(f"Setup done", flush=True)
+    
+    def train_print(self, txt):
+        txt += '\n'
+        self.train_log.write(txt)
+        self.train_log.flush()
+    
+    def eval_print(self, txt):
+        txt += '\n'
+        self.eval_log.write(txt)
+        self.eval_log.flush()
+            
     def loss_per_epoch(self, loader, train=True):
         losses = 0
         rank_kl_p = torch.empty(0, device=self.local_rank)
@@ -97,7 +114,7 @@ class DDPTrainer:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
         
-        self.scheduler.step()
+        if train: self.scheduler.step()
         kl_p = [torch.zeros_like(rank_kl_p) for _ in range(self.world_size)]
         kl_q = [torch.zeros_like(rank_kl_q) for _ in range(self.world_size)]
         dist.all_gather(kl_p, rank_kl_p)
@@ -105,7 +122,7 @@ class DDPTrainer:
         kl_p = torch.cat(kl_p)
         kl_q = torch.cat(kl_q)
 
-        epoch_loss = torch.tensor(losses/len(self.train_loader), device=self.local_rank)
+        epoch_loss = torch.tensor(losses/len(loader), device=self.local_rank)
         dist.all_reduce(epoch_loss, op=dist.ReduceOp.SUM)
         epoch_loss /= self.world_size
     
@@ -113,12 +130,12 @@ class DDPTrainer:
      
     def train(self):
         if self.world_rank == 0:
-            eprint(f'*** {len(self.train_loader)} batches per rank ***', flush=True)
-            print('Epoch \tTraining Loss \t   Time (s) \t   LR \t\t\t\t  KL Divergence', flush=True)
-            print('      \t              \t            \t \t \t \t  P   \t\t\t    Q', flush=True)
+            print(f'*** {len(self.train_loader)} batches per rank ***', flush=True)
+            self.train_print('Epoch \tTraining Loss \t   Time (s) \t   LR \t\t\t\t  KL Divergence')
+            self.train_print('      \t              \t            \t \t \t \t  P   \t\t\t    Q')
             
-            eprint('Epoch \t   Eval Loss  \t\t\t\t\t  KL Divergence', flush=True)
-            eprint('      \t              \t\t \t \t  P   \t\t\t    Q', flush=True)
+            self.eval_print('Epoch \t   Eval Loss  \t\t\t\t\t  KL Divergence')
+            self.eval_print('      \t              \t\t \t \t  P   \t\t\t    Q')
             
         for epoch in range(self.start_epoch, self.num_epochs):
 
@@ -147,19 +164,19 @@ class DDPTrainer:
                 torch.cuda.synchronize()
                 end_time = time.time()
     
-                if epoch % self.log_interval == 0:
-                    print('%.5i \t    %.5f \t    %.2f \t %.3e \t %.4e +/- %.4e\t    %.4e +/- %.4e\t' % (epoch, epoch_loss.item(), end_time - start_time, self.optimizer.param_groups[0]['lr'],\
+                if epoch % self.train_log_interval == 0:
+                    self.train_print('%.5i \t    %.5f \t    %.2f \t %.3e \t %.4e +/- %.4e\t    %.4e +/- %.4e\t' % (epoch, epoch_loss.item(), end_time - start_time, self.optimizer.param_groups[0]['lr'],\
                                                                                                                          kl_p.mean().item(), kl_p.std().item(),\
-                                                                                                                         kl_q.mean().item(), kl_q.std().item()), flush=True)
+                                                                                                                         kl_q.mean().item(), kl_q.std().item()))
             
-            if epoch % self.eval_interval == 0:
+            if epoch % self.eval_log_interval == 0:
                 self.model.eval()
                 self.val_sampler.set_epoch(epoch)
                 with torch.no_grad():
                     epoch_loss, kl_p, kl_q = self.loss_per_epoch(self.val_loader, train=False)
                 
                 if self.world_rank == 0:
-                    eprint('%.5i \t    %.5f \t   %.4e +/- %.4e\t    %.4e +/- %.4e\t' % (epoch, epoch_loss.item(), kl_p.mean().item(), kl_p.std().item(), kl_q.mean().item(), kl_q.std().item()), flush=True)
+                    self.eval_print('%.5i \t    %.5f \t   %.4e +/- %.4e\t    %.4e +/- %.4e' % (epoch, epoch_loss.item(), kl_p.mean().item(), kl_p.std().item(), kl_q.mean().item(), kl_q.std().item()))
               
             dist.barrier()
        

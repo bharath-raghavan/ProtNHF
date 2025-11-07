@@ -63,7 +63,7 @@ class Flow(torch.nn.Module):
         
         if integrator == 'euler':
             self.integrator = Euler(self.n_types, dt, transformer_d_model, transformer_ff_dim, n_transformer_heads, n_transformer_layers)
-        else:
+        elif integrator == 'leapfrog':
             self.integrator = LeapFrog(self.n_types, dt, transformer_d_model, transformer_ff_dim, n_transformer_heads, n_transformer_layers)
         
         self.register_buffer('niter', torch.tensor(niter))

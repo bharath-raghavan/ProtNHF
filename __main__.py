@@ -37,5 +37,15 @@ def sample(config: Annotated[Path, typer.Argument(help="Training parameter yaml 
     config = ConfigParams.fromFile(config)
     model = config.get()
     hndl.generate()
+
+@app.command()
+def evaluate(config: Annotated[Path, typer.Argument(help="Training parameter yaml file.")]):
+    """ Use a trained model to generate structures.
+    """
+    config = ConfigParams.fromFile(config)
+    model = config.get()
+    
+    
+        
     
 app()

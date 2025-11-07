@@ -24,22 +24,31 @@ class FlowParams(BaseModel):
                          self.energy.d_model, self.energy.ff_dim, self.energy.n_heads, self.energy.n_layers)
         if not read_cpt: return model
         if os.path.exists(self.checkpoint) and self.checkpoint != None:
-            checkpoint = torch.load(self.checkpoint, weights _only=False)
+            checkpoint = torch.load(self.checkpoint, weights_only=False)
             model.load_state_dict(self.checkpoint['model_state_dict'])
         return model
-    
-class TrainingParams(BaseModel):
-    dataset: str
-    batch_size: int
-    train_val_split: List
-    num_epochs: int
-    lr: float
-    scheduler_type: Optional[str] = None
-    scheduler_params: Optional[Dict] = None
-    train_log_interval: int
-    accum_iter: int
-    eval_log_interval: int
 
+class DatasetParams(BaseModel):
+    file: str
+    batch_size: int
+    split: Optional[float] = 0.8
+
+class LoggingParams(BaseModel):
+    interval: Optional[int] = 1
+    file: str
+   
+class LRParams(BaseModel):
+    start: float
+    scheduler: Optional[Dict] = None
+                             
+class TrainingParams(BaseModel):
+    dataset: DatasetParams
+    num_epochs: Optional[int] = 5000
+    accum_iter: Optional[int] = 0
+    train_log: LoggingParams
+    eval_log: LoggingParams
+    lr: LRParams
+               
 class ConfigParams(BaseModel):
     model: FlowParams
     training:  Optional[TrainingParams] = None
