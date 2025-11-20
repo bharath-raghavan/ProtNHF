@@ -44,7 +44,8 @@ class DDPTrainer:
         self.val_sampler = DistributedSampler(val_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
         self.val_loader = DataLoader(val_dataset, batch_size=config.training.dataset.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.val_sampler, drop_last=False)
         
-        self.model = config.model.get(read_cpt=False).to(self.local_rank)
+        self.model = Flow(config.model.n_types, config.model.hidden_dims, config.model.dt, config.model.niter, config.model.std, config.model.integrator,\
+                         config.model.energy.d_model, config.model.energy.ff_dim, config.model.energy.n_heads, config.model.energy.n_layers).to(self.local_rank)
         self.checkpoint_path = config.model.checkpoint
             
         if os.path.exists(self.checkpoint_path) and self.checkpoint_path != None:
@@ -74,7 +75,12 @@ class DDPTrainer:
         self.train_log_interval = config.training.train_log.interval
         self.eval_log_interval = config.training.eval_log.interval
         
+        self.train_log_exist = os.path.exists(config.training.train_log.file)
+            
         self.train_log = open(config.training.train_log.file, 'a')
+        
+        self.eval_log_exist = os.path.exists(config.training.eval_log.file)
+            
         self.eval_log = open(config.training.eval_log.file, 'a')
         
         if self.world_rank == 0:
@@ -131,11 +137,14 @@ class DDPTrainer:
     def train(self):
         if self.world_rank == 0:
             print(f'*** {len(self.train_loader)} batches per rank ***', flush=True)
-            self.train_print('Epoch \tTraining Loss \t   Time (s) \t   LR \t\t\t\t  KL Divergence')
-            self.train_print('      \t              \t            \t \t \t \t  P   \t\t\t    Q')
             
-            self.eval_print('Epoch \t   Eval Loss  \t\t\t\t\t  KL Divergence')
-            self.eval_print('      \t              \t\t \t \t  P   \t\t\t    Q')
+            if not self.train_log_exist:
+                self.train_print('Epoch \tTraining Loss \t   Time (s) \t   LR \t\t\t\t  KL Divergence')
+                self.train_print('      \t              \t            \t \t \t \t  P   \t\t\t    Q')
+            
+            if not self.eval_log_exist:
+                self.eval_print('Epoch \t   Eval Loss  \t\t\t\t\t  KL Divergence')
+                self.eval_print('      \t              \t\t \t \t  P   \t\t\t    Q')
             
         for epoch in range(self.start_epoch, self.num_epochs):
 

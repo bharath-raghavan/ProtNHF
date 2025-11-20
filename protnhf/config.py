@@ -18,15 +18,6 @@ class FlowParams(BaseModel):
     n_types: int
     checkpoint: Optional[str] = None
     energy: TransformerParams
-    
-    def get(self, read_cpt=True):
-        model = Flow(self.n_types, self.hidden_dims, self.dt, self.niter, self.std, self.integrator,\
-                         self.energy.d_model, self.energy.ff_dim, self.energy.n_heads, self.energy.n_layers)
-        if not read_cpt: return model
-        if os.path.exists(self.checkpoint) and self.checkpoint != None:
-            checkpoint = torch.load(self.checkpoint, weights_only=False)
-            model.load_state_dict(self.checkpoint['model_state_dict'])
-        return model
 
 class DatasetParams(BaseModel):
     file: str

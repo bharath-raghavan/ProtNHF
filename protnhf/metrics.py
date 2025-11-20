@@ -1,5 +1,18 @@
+import random
 import torch
 import esm
+from .dataset import Data
+
+def reversibilty(model):
+    num_points = random.randint(1, 800)
+    num_batch = random.randint(1, 10)
+    h = torch.randint(low=0, high=model.n_types, size=(num_points*num_batch,))
+    batch = torch.cat([torch.zeros(num_points)+i for i in range(num_batch)])
+    data = Data(h, batch)
+    with torch.no_grad():
+        p0, q0, qT_original = model.forward(data, train=False)
+        pT, qT = model.reverse(p0, q0, data.batch)
+    return torch.abs(qT_original-qT).max()
 
 class ESM2Handle:
     def __init__(self):

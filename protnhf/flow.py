@@ -99,11 +99,6 @@ class Flow(torch.nn.Module):
         else:
             return p, q, qT
     
-    def check_reversibility(self, data):
-        p0, q0, qT_original = self.forward(data, train=False)
-        pT, qT = self.reverse(p0, q0, data.batch)
-        return qT_original, p0, q0, pT, qT
-    
     def sample(self, num):
         shape = (num, self.n_types)
         p = self.prior.sample(sample_shape=shape)

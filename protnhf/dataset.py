@@ -1,6 +1,15 @@
 import torch
 import h5py
 from Bio import SeqUtils
+AA_TO_INDEX = {aa: i for i, aa in enumerate(SeqUtils.IUPACData.protein_letters_3to1.values())}
+
+def decode(x):
+    INDEX_TO_AA  = {i: aa for aa, i in AA_TO_INDEX.items()} 
+    seq = ""
+    for i in x.detach().tolist():
+        seq += INDEX_TO_AA[i]
+                                    
+    return seq
 
 class Data:
     def __init__(self, h, batch=None, device='cpu'):
@@ -41,8 +50,6 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, hdf5_file):
         self.file = h5py.File(hdf5_file, 'r')
         self.len = self.file['len'][()]
-        self.AA_TO_INDEX = {aa: i for i, aa in enumerate(SeqUtils.IUPACData.protein_letters_3to1.values())}
-        self.INDEX_TO_AA  = {i: aa for aa, i in self.AA_TO_INDEX.items()} 
          
     def __len__(self):
         return self.len
@@ -50,13 +57,8 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         row = self.file[str(idx)]
         seq = row.attrs['seq']
-        h = torch.tensor([self.AA_TO_INDEX[i] for i in seq])
+        h = torch.tensor([AA_TO_INDEX[i] for i in seq])
         
         return Data(h)
     
-    def decode(self, x):
-        seq = ""
-        for i in x.detach().tolist():
-            seq += self.INDEX_TO_AA[i]
-                                        
-        return seq
+    
