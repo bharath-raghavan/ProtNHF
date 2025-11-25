@@ -53,7 +53,7 @@ class LeapFrog(Euler):
         q = q - self.a**2*p*self.dt
         p = p + self.diff(self.V(q, batch), q)*self.dt/2
         return p, q
-                
+        
 class Flow(torch.nn.Module):
     def __init__(self, n_types, hidden_dims, dt, niter, std, integrator, transformer_d_model, transformer_ff_dim, n_transformer_heads, n_transformer_layers):
         super().__init__()

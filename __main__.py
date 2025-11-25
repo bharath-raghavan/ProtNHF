@@ -44,7 +44,7 @@ def sample(config: Annotated[Path, typer.Argument(help="Training parameter yaml 
     hndl.generate()
 
 @app.command()
-def test(config: Annotated[Path, typer.Argument(help="Training parameter yaml file.")]):
+def test(config: Annotated[Path, typer.Argument(help="Training parameter yaml file.")], num: Annotated[int, typer.Argument(help="Sequence Length.")]):
     """ Test a trained model.
     """
     
@@ -61,12 +61,14 @@ def test(config: Annotated[Path, typer.Argument(help="Training parameter yaml fi
 
         print(f"Max difference of q: {metrics.reversibilty(model)}")
         
-        logits = model.sample(20)
+        logits = model.sample(num)
 
-        new_seq = decode(logits)
+        seq = decode(logits)
         print("Sampling:")
-        print(new_seq)
-        print(esm2hndl.get_pppl(new_seq))
+        print(seq)
+        print(f"Shannon Entropy: {metrics.shannon_entropy(seq)}")
+        print(f"Low Sequence Complexity Percentage: {metrics.seg_low_complexity(seq)}")
+        print(f"ESM-2 PPPL: {esm2hndl.get_pppl(seq)}")
         print("=================================")
         
     
