@@ -112,7 +112,7 @@ class DDPTrainer:
             
             if train:
                 loss = loss + 0.0 * sum(p.sum() for p in self.model.parameters())
-    
+                loss = loss/self.accum_iter
                 loss.backward()
 
                 # weights update
