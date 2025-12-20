@@ -17,7 +17,9 @@ class Euler(torch.nn.Module):
         self.V = EmbeddingEnergy(input_nf, d_model, ff_dim, n_heads, n_layers)
         self.register_parameter(name='a', param=torch.nn.Parameter(1*torch.eye(1)))
 
-    def diff(self, y, x):
+    def gradV(self, x, batch):        
+        y = self.V(x, batch)
+        
         grad_outputs = [torch.ones_like(y)]
         dy = torch.autograd.grad(
                [y],
@@ -26,32 +28,33 @@ class Euler(torch.nn.Module):
                create_graph=True,
                retain_graph=True,
            )[0]
+        
         if dy is None:
            raise RuntimeError(
                "Autograd returned None for the force prediction.")
         return dy
 
     def forward(self, p, q, batch):
-        p = p - self.diff(self.V(q, batch), q)*self.dt
+        p = p - self.gradV(q, batch)*self.dt
         q = q + self.a**2*p*self.dt
         return p, q
 
     def reverse(self, p, q, batch):
         q = q - self.a**2*p*self.dt
-        p = p + self.diff(self.V(q, batch), q)*self.dt
+        p = p + self.gradV(q, batch)*self.dt
         return p, q
 
 class LeapFrog(Euler):
     def forward(self, p, q, batch):
-        p = p - self.diff(self.V(q, batch), q)*self.dt/2
+        p = p - self.gradV(q, batch)*self.dt/2
         q = q + self.a**2*p*self.dt
-        p = p - self.diff(self.V(q, batch), q)*self.dt/2
+        p = p - self.gradV(q, batch)*self.dt/2
         return p, q
     
     def reverse(self, p, q, batch):
-        p = p + self.diff(self.V(q, batch), q)*self.dt/2
+        p = p + self.gradV(q, batch)*self.dt/2
         q = q - self.a**2*p*self.dt
-        p = p + self.diff(self.V(q, batch), q)*self.dt/2
+        p = p + self.gradV(q, batch)*self.dt/2
         return p, q
         
 class Flow(torch.nn.Module):
