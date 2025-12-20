@@ -55,10 +55,7 @@ class Dataset(torch.utils.data.Dataset):
         return self.len
     
     def __getitem__(self, idx):
-        row = self.file[str(idx)]
-        seq = row.attrs['seq']
+        seq = self.file['seqs'][idx].decode("utf-8")
         h = torch.tensor([AA_TO_INDEX[i] for i in seq])
         
         return Data(h)
-    
-    
