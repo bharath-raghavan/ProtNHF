@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List
+from typing import Dict, Optional, Tuple
 from pydantic import BaseModel
 import importlib, yaml, json
 from .flow import Flow
@@ -28,17 +28,19 @@ class LoggingParams(BaseModel):
     interval: Optional[int] = 1
     file: str
    
-class LRParams(BaseModel):
-    start: float
-    scheduler: Optional[Dict] = None
+class OptimParams(BaseModel):
+    override_cpt: Optional[bool] = False
+    lr: float
+    betas: Tuple
+    weight_decay: float
+    warmup_epochs: int
                              
 class TrainingParams(BaseModel):
     dataset: DatasetParams
-    num_epochs: Optional[int] = 5000
-    accum_iter: Optional[int] = 0
+    num_epochs: Optional[int] = 500
     train_log: LoggingParams
     eval_log: LoggingParams
-    lr: LRParams
+    optim: OptimParams
                
 class ConfigParams(BaseModel):
     model: FlowParams

@@ -6,6 +6,7 @@ import importlib
 import sys
 import numpy as np
 import torch
+from transformers import get_cosine_schedule_with_warmup
 from .dataset import Dataset, DataLoader
 from .flow import Flow
 
@@ -55,22 +56,23 @@ class DDPTrainer:
         else:
             checkpoint = None
             self.start_epoch = 0
-            
-        self.model = DDP(self.model, device_ids=[self.local_rank])
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.training.lr.start)
         
-        if config.training.lr.scheduler['type'].lower() == 'linear':
-            self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=float(config.training.lr.scheduler['start_factor']),\
-                                                            end_factor=float(config.training.lr.scheduler['end_factor']), total_iters=int(config.training.lr.scheduler['total_iters']))
-        else:
-            self.scheduler = None
+        self.num_epochs = config.training.num_epochs
+        
+        self.model = DDP(self.model, device_ids=[self.local_rank])
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=config.training.optim.lr, betas=config.training.optim.betas, weight_decay=config.training.optim.weight_decay)
+        
+        steps_per_epoch = len(self.train_loader)
+        
+        self.scheduler = get_cosine_schedule_with_warmup(
+            self.optimizer,
+            num_warmup_steps=config.training.optim.warmup_epochs*steps_per_epoch,
+            num_training_steps=self.num_epochs*steps_per_epoch
+        )
             
-        if checkpoint:
+        if checkpoint and not config.training.optim.override_cpt:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        
-        self.num_epochs = self.start_epoch+config.training.num_epochs
-        self.accum_iter = config.training.accum_iter
         
         self.train_log_interval = config.training.train_log.interval
         self.eval_log_interval = config.training.eval_log.interval
@@ -112,15 +114,11 @@ class DDPTrainer:
             
             if train:
                 loss = loss + 0.0 * sum(p.sum() for p in self.model.parameters())
-                loss = loss/self.accum_iter
                 loss.backward()
-
-                # weights update
-                if ((i + 1) % self.accum_iter == 0) or (i + 1 == len(self.train_loader)):
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
+                self.optimizer.step()
+                self.scheduler.step()
+                self.optimizer.zero_grad()
         
-        if train: self.scheduler.step()
         kl_p = [torch.zeros_like(rank_kl_p) for _ in range(self.world_size)]
         kl_q = [torch.zeros_like(rank_kl_q) for _ in range(self.world_size)]
         dist.all_gather(kl_p, rank_kl_p)
