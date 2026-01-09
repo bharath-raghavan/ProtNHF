@@ -41,10 +41,21 @@ class TrainingParams(BaseModel):
     train_log: LoggingParams
     eval_log: LoggingParams
     optim: OptimParams
+
+class BiasParams(BaseModel):
+    type: str
+    k: Optional[float] = None
+    x0: Optional[str] = None
+    eps: Optional[float] = None
+
+class SampleParams(BaseModel):
+    mode: str
+    bias: Optional[BiasParams] = None
                
 class ConfigParams(BaseModel):
     model: FlowParams
     training:  Optional[TrainingParams] = None
+    sample: Optional[SampleParams] = None
     
     @staticmethod
     def fromFile(input):

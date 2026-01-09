@@ -39,7 +39,7 @@ class DDPTrainer:
         full_dataset = Dataset(config.training.dataset.file)
         train_val_split = [config.training.dataset.split, 1-config.training.dataset.split]
         train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, train_val_split)
-        self.train_sampler = DistributedSampler(train_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)
+        self.train_sampler = DistributedSampler(train_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)            
         self.train_loader = DataLoader(train_dataset, batch_size=config.training.dataset.batch_size, num_workers=self.num_cpus_per_task, pin_memory=True, shuffle=False, sampler=self.train_sampler, drop_last=False)
         
         self.val_sampler = DistributedSampler(val_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)

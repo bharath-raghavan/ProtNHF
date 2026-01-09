@@ -3,6 +3,7 @@ import numpy as np
 import random
 from collections import Counter
 import torch
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 import esm
 from .dataset import Data
 
@@ -24,22 +25,64 @@ class ESM2Handle:
         self.batch_converter = self.alphabet.get_batch_converter()
     
     def get_pppl(self, seq):
-        _, _, tokens = self.batch_converter([('protein', seq)])
+        # ESM expects (name, sequence) tuples
+        data = [("seq1", seq)]
+        batch_labels, _, batch_tokens = self.batch_converter(data)
+        batch_tokens = batch_tokens  # shape [1, L]
 
-        # Masking one token at a time
-        N = tokens.size(1)
-        log_probs = []
-        for i in range(N):
-            masked_tokens = tokens.clone()
-            masked_tokens[0, i] = self.alphabet.mask_idx  # mask ith token
-            with torch.no_grad():
-                logits = self.model(masked_tokens, repr_layers=[33])["logits"]
-            # Softmax to get probabilities for the original token
-            prob = torch.softmax(logits[0, i], dim=-1)[tokens[0, i]]
-            log_probs.append(torch.log(prob))
-        # Pseudo-perplexity
-        pppl = torch.exp(-torch.stack(log_probs).sum() / (N-2))
-        return pppl.item()
+        L = batch_tokens.size(1)
+
+        # Prepare batch of masked sequences: each position masked once
+        masked_tokens = batch_tokens.repeat(L, 1)  # [L, seq_len]
+        # Exclude BOS/EOS tokens from masking (mask indices 1..L-2)
+        for i in range(1, L-1):
+            masked_tokens[i, i] = self.alphabet.mask_idx
+
+        # Forward pass
+        logits = self.model(masked_tokens, repr_layers=[], return_contacts=False)["logits"]  # [L, seq_len, vocab_size]
+
+        # Compute log-probabilities
+        log_probs = torch.log_softmax(logits, dim=-1)
+
+        # True token log-probabilities
+        # For each row i, take log-prob of the token at position i
+        token_log_probs = torch.tensor([
+            log_probs[i, i, batch_tokens[0, i]].item()
+            for i in range(1, L-1)
+        ])
+
+        # Sum over positions
+        ll = token_log_probs.sum().item()
+        # pseudo-perplexity
+        return math.exp(-ll / (L - 2))  # exclude BOS/EOS
+
+class PepMLMHandle:
+    def __init__(self):
+        model_name = "ChatterjeeLab/PepMLM-650M"
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForMaskedLM.from_pretrained(model_name)
+        self.model.eval()
+
+    @torch.no_grad()
+    def get_pppl(self, seq):
+        tokens = self.tokenizer(seq, return_tensors="pt")
+        input_ids = tokens["input_ids"]
+
+        L = input_ids.size(1) - 2  # exclude CLS/SEP
+        log_likelihood = 0.0
+
+        for i in range(1, L + 1):
+            masked = input_ids.clone()
+            true_token = masked[0, i].item()
+            masked[0, i] = self.tokenizer.mask_token_id
+
+            logits = self.model(masked).logits[0, i]
+            log_probs = torch.log_softmax(logits, dim=-1)
+
+            log_likelihood += log_probs[true_token].item()
+
+        return math.exp(-log_likelihood / L)
+        
 
 def shannon_entropy(seq):
     cnt = dict(Counter(seq))

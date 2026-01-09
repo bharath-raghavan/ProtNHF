@@ -45,6 +45,7 @@ class DataLoader(torch.utils.data.DataLoader):
                torch.cat([d.h for d in dataset]),
                batch=torch.cat([d.batch+i for i,d in enumerate(dataset)])
            )
+
                              
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, hdf5_file):

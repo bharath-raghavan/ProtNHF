@@ -17,7 +17,7 @@ class Euler(torch.nn.Module):
         self.V = EmbeddingEnergy(input_nf, d_model, ff_dim, n_heads, n_layers)
         self.register_parameter(name='a', param=torch.nn.Parameter(1*torch.eye(1)))
 
-    def gradV(self, x, batch):        
+    def gradV(self, x, batch, bias=None):        
         y = self.V(x, batch)
         
         grad_outputs = [torch.ones_like(y)]
@@ -32,16 +32,17 @@ class Euler(torch.nn.Module):
         if dy is None:
            raise RuntimeError(
                "Autograd returned None for the force prediction.")
-        return dy
+        if bias: return dy+bias(x)
+        else: return dy
 
     def forward(self, p, q, batch):
         p = p - self.gradV(q, batch)*self.dt
         q = q + self.a**2*p*self.dt
         return p, q
 
-    def reverse(self, p, q, batch):
+    def reverse(self, p, q, batch, bias):
         q = q - self.a**2*p*self.dt
-        p = p + self.gradV(q, batch)*self.dt
+        p = p + self.gradV(q, batch, bias)*self.dt
         return p, q
 
 class LeapFrog(Euler):
@@ -51,10 +52,10 @@ class LeapFrog(Euler):
         p = p - self.gradV(q, batch)*self.dt/2
         return p, q
     
-    def reverse(self, p, q, batch):
-        p = p + self.gradV(q, batch)*self.dt/2
+    def reverse(self, p, q, batch, bias):
+        p = p + self.gradV(q, batch, bias)*self.dt/2
         q = q - self.a**2*p*self.dt
-        p = p + self.gradV(q, batch)*self.dt/2
+        p = p + self.gradV(q, batch, bias)*self.dt/2
         return p, q
         
 class Flow(torch.nn.Module):
@@ -102,7 +103,7 @@ class Flow(torch.nn.Module):
         else:
             return p, q, qT
     
-    def sample(self, num):
+    def sample(self, num, bias=None):
         shape = (num, self.n_types)
         p = self.prior.sample(sample_shape=shape)
         q = self.prior.sample(sample_shape=shape)
@@ -110,13 +111,13 @@ class Flow(torch.nn.Module):
         batch = torch.zeros(num, dtype=torch.int64) # only one sample requested
         
         with torch.no_grad():
-            return self.embedd.reverse(self.reverse(p, q, batch)[1])
+            return self.embedd.reverse(self.reverse(p, q, batch, bias)[1])
     
-    def reverse(self, p, q, batch):
+    def reverse(self, p, q, batch, bias=None):
         q.requires_grad_(True)
         
         with torch.enable_grad():
             for i in range(self.niter):
-                p, q = self.integrator.reverse(p, q, batch)
+                p, q = self.integrator.reverse(p, q, batch, bias)
     
         return p, q

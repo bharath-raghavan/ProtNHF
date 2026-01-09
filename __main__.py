@@ -16,12 +16,14 @@ import yaml
 import json
 
 import torch
+import random
+import torch.nn.functional as F
 
 from protnhf.trainer import DDPTrainer
 from protnhf.config import ConfigParams
 from protnhf.flow import Flow
 from protnhf import metrics
-from protnhf.dataset import decode
+from protnhf.dataset import decode, Dataset, AA_TO_INDEX
 
 Model = Annotated[Path,
                 typer.Argument(help="NN Parameters for generation.")]
@@ -36,12 +38,43 @@ def train(config: Annotated[Path, typer.Argument(help="Training parameter yaml f
     hndl.train()
 
 @app.command()
-def sample(config: Annotated[Path, typer.Argument(help="Training parameter yaml file.")]):
+def biastest(config: Annotated[Path, typer.Argument(help="Training parameter yaml file.")]):
     """ Use a trained model to generate structures.
     """
     config = ConfigParams.fromFile(config)
-    model = config.get()
-    hndl.generate()
+    model = Flow(config.model.n_types, config.model.hidden_dims, config.model.dt, config.model.niter, config.model.std, config.model.integrator,\
+                         config.model.energy.d_model, config.model.energy.ff_dim, config.model.energy.n_heads, config.model.energy.n_layers)
+    dataset = Dataset(config.training.dataset.file)
+    dataT = dataset[random.randint(0, len(dataset))]
+    esm2hndl = metrics.ESM2Handle()
+    
+    seq = decode(dataT.h)
+    print("From dataset:")
+    print(seq)
+    print(f"Shannon Entropy: {metrics.shannon_entropy(seq)}")
+    print(f"Low Sequence Complexity Percentage: {metrics.seg_low_complexity(seq)}")
+    print(f"ESM-2 PPPL: {esm2hndl.get_pppl(seq)}")
+    
+    unwated_aa = torch.tensor([AA_TO_INDEX['E']])
+    xO = F.one_hot(unwated_aa, num_classes=20).to(torch.float)
+    k=50000
+    eps=0
+
+    def get_bias(q):
+        r2 = (((q - xO)**2).sum(dim=1) + eps**2)**(1.5)
+        return -k*(q - xO)/r2[:, None]
+    
+    p0, q0, _ = model.forward(dataT, train=False)
+    logits = model.embedd.reverse(model.reverse(p0, q0, dataT.batch, get_bias)[1])
+    seq = decode(logits)
+    esm2hndl = metrics.ESM2Handle()
+    
+    print("Sampling:")
+    print(seq)
+    print(f"Shannon Entropy: {metrics.shannon_entropy(seq)}")
+    print(f"Low Sequence Complexity Percentage: {metrics.seg_low_complexity(seq)}")
+    print(f"ESM-2 PPPL: {esm2hndl.get_pppl(seq)}")
+    
 
 @app.command()
 def test(config: Annotated[Path, typer.Argument(help="Training parameter yaml file.")], num: Annotated[int, typer.Argument(help="Sequence Length.")]):
