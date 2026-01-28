@@ -23,6 +23,7 @@ class DatasetParams(BaseModel):
     file: str
     batch_size: int
     split: Optional[float] = 0.8
+    limit: Optional[int] = -1
 
 class LoggingParams(BaseModel):
     interval: Optional[int] = 1
@@ -51,11 +52,18 @@ class BiasParams(BaseModel):
 class SampleParams(BaseModel):
     mode: str
     bias: Optional[BiasParams] = None
+
+class LinearRegression(BaseModel):
+    property: str
+    batch_size: int
+    num_epochs: int
+    lr: float
                
 class ConfigParams(BaseModel):
     model: FlowParams
     training:  Optional[TrainingParams] = None
     sample: Optional[SampleParams] = None
+    linreg: Optional[LinearRegression] = None
     
     @staticmethod
     def fromFile(input):

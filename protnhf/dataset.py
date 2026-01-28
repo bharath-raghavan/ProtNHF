@@ -48,9 +48,12 @@ class DataLoader(torch.utils.data.DataLoader):
 
                              
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, hdf5_file):
+    def __init__(self, hdf5_file, limit=-1):
         self.file = h5py.File(hdf5_file, 'r')
-        self.len = self.file['len'][()]
+        if limit == -1:
+            self.len = self.file['len'][()]
+        else:
+            self.len = limit
          
     def __len__(self):
         return self.len

@@ -3,7 +3,6 @@ import numpy as np
 import random
 from collections import Counter
 import torch
-from transformers import AutoTokenizer, AutoModelForMaskedLM
 import esm
 from .dataset import Data
 
@@ -55,34 +54,6 @@ class ESM2Handle:
         ll = token_log_probs.sum().item()
         # pseudo-perplexity
         return math.exp(-ll / (L - 2))  # exclude BOS/EOS
-
-class PepMLMHandle:
-    def __init__(self):
-        model_name = "ChatterjeeLab/PepMLM-650M"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForMaskedLM.from_pretrained(model_name)
-        self.model.eval()
-
-    @torch.no_grad()
-    def get_pppl(self, seq):
-        tokens = self.tokenizer(seq, return_tensors="pt")
-        input_ids = tokens["input_ids"]
-
-        L = input_ids.size(1) - 2  # exclude CLS/SEP
-        log_likelihood = 0.0
-
-        for i in range(1, L + 1):
-            masked = input_ids.clone()
-            true_token = masked[0, i].item()
-            masked[0, i] = self.tokenizer.mask_token_id
-
-            logits = self.model(masked).logits[0, i]
-            log_probs = torch.log_softmax(logits, dim=-1)
-
-            log_likelihood += log_probs[true_token].item()
-
-        return math.exp(-log_likelihood / L)
-        
 
 def shannon_entropy(seq):
     cnt = dict(Counter(seq))

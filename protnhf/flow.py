@@ -19,6 +19,7 @@ class Euler(torch.nn.Module):
 
     def gradV(self, x, batch, bias=None):        
         y = self.V(x, batch)
+        if bias: y = y + bias(x, batch)
         
         grad_outputs = [torch.ones_like(y)]
         dy = torch.autograd.grad(
@@ -32,7 +33,6 @@ class Euler(torch.nn.Module):
         if dy is None:
            raise RuntimeError(
                "Autograd returned None for the force prediction.")
-        if bias: return dy+bias(x)
         else: return dy
 
     def forward(self, p, q, batch):

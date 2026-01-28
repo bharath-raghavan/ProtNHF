@@ -36,7 +36,7 @@ class DDPTrainer:
         if self.world_rank == 0:
             print(f"Running DDP\nInitialized? {dist.is_initialized()}", flush=True)
         
-        full_dataset = Dataset(config.training.dataset.file)
+        full_dataset = Dataset(config.training.dataset.file, config.training.dataset.limit)
         train_val_split = [config.training.dataset.split, 1-config.training.dataset.split]
         train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, train_val_split)
         self.train_sampler = DistributedSampler(train_dataset, num_replicas=self.world_size, rank=self.world_rank, shuffle=False)            
