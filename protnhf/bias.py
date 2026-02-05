@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 import torch
-import torch.nn.functional as F
 from torch_scatter import scatter
-from .dataset import AA_TO_INDEX
 
 class CombinedBias:
     def __init__(self, biases):
@@ -16,11 +14,10 @@ class CombinedBias:
         return bias
         
 class CoulombBias:
-    def __init__(self, k, eps, residue):
-        aa = torch.tensor([AA_TO_INDEX[residue]])
-        self.xO = F.one_hot(aa, num_classes=20).to(torch.float)
+    def __init__(self, k, xO):
+        self.xO = xO
         self.k = k
-        self.eps = eps
+        self.eps = 1e-6
 
     def __call__(self, x, batch):
         r = x - self.xO
@@ -29,9 +26,8 @@ class CoulombBias:
         return scatter(U, batch, dim=0, reduce='sum')
 
 class GaussianBias:
-    def __init__(self, k, sigma, residue):
-        aa = torch.tensor([AA_TO_INDEX[residue]])
-        self.xO = F.one_hot(aa, num_classes=20).to(torch.float)
+    def __init__(self, k, sigma, xO):
+        self.xO = xO
         self.k = k
         self.sigma = sigma
 
@@ -41,13 +37,25 @@ class GaussianBias:
         U = self.k * torch.exp(-0.5*dist2/self.sigma**2)
         return scatter(U, batch, dim=0, reduce='sum')
 
-class TanHBias:
-    def __init__(self, k, w, xO):
-        self.xO = xO.mean(dim=0)
+class HarmonicBias:
+    def __init__(self, k, property, xO):
+        self.xO = xO
         self.k = k
-        self.v = w / torch.norm(w)  # unit vector
+        self.property = property
 
     def __call__(self, x, batch):
-        proj = (x-self.xO) @ self.v
+        r = x - self.xO
+        dist2 = (r**2).sum(dim=1)
+        U = self.k * torch.exp(-0.5*dist2/self.sigma**2)
+        return scatter(U, batch, dim=0, reduce='sum')
+
+class TanHBias:
+    def __init__(self, k, xO):
+        self.xO = xO
+        self.k = k
+        #self.v = w / torch.norm(w)  # unit vector
+
+    def __call__(self, x, batch):
+        proj = (x-self.xO)# @ self.v
         U = self.k * torch.tanh(proj)
         return scatter(U, batch, dim=0, reduce='sum')

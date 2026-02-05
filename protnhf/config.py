@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 from pydantic import BaseModel
 import importlib, yaml, json
 from .flow import Flow
@@ -46,11 +46,15 @@ class TrainingParams(BaseModel):
 class BiasParams(BaseModel):
     type: str
     k: Optional[float] = None
-    x0: Optional[str] = None
+    residue: Optional[str] = None
     eps: Optional[float] = None
+    sigma: Optional[float] = None
+    w: Optional[str] = None
 
 class SampleParams(BaseModel):
     mode: str
+    nums: Optional[List] = None
+    seqs: Optional[List] = None
     bias: Optional[BiasParams] = None
 
 class LinearRegression(BaseModel):

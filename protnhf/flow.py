@@ -103,16 +103,6 @@ class Flow(torch.nn.Module):
         else:
             return p, q, qT
     
-    def sample(self, num, bias=None):
-        shape = (num, self.n_types)
-        p = self.prior.sample(sample_shape=shape)
-        q = self.prior.sample(sample_shape=shape)
-        
-        batch = torch.zeros(num, dtype=torch.int64) # only one sample requested
-        
-        with torch.no_grad():
-            return self.embedd.reverse(self.reverse(p, q, batch, bias)[1])
-    
     def reverse(self, p, q, batch, bias=None):
         q.requires_grad_(True)
         
