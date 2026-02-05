@@ -52,9 +52,9 @@ class BiasParams(BaseModel):
     w: Optional[str] = None
 
 class SampleParams(BaseModel):
-    mode: str
-    nums: Optional[List] = None
-    seqs: Optional[List] = None
+    lengths: Optional[List] = None
+    length: Optional[int] = None
+    num: Optional[int] = 1
     bias: Optional[BiasParams] = None
 
 class LinearRegression(BaseModel):
