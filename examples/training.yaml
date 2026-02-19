@@ -14,7 +14,7 @@ model:
 training:
   num_epochs: 650
   dataset:
-    file: /lustre/orion/stf006/scratch/bharathrn/datasets/uniprot/dataset.h5
+    file: dataset.h5
     batch_size: 30
   train_log:
     file: train_log.out
