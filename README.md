@@ -1,8 +1,11 @@
 # ProtNHF: Neural Hamiltonian Flows for Controllable Protein Sequence Generation
 
-by Bharath Raghavan and David M. Rogers
+**Authors:** Bharath Raghavan¹, David M. Rogers¹  
 
-National Center for Computational Sciences, Oak Ridge National Laboratory
+**Affiliations:**  
+¹ National Center for Computational Sciences, Oak Ridge National Laboratory
+
+
 
 ProtNHF is a generative model for protein sequences that enables continuous, controllable design without retraining. It leverages neural Hamiltonian flows with a Transformer-based energy function to map a latent Gaussian to protein embeddings. Sampling-time bias functions allow steering properties like amino acid composition or net charge smoothly and predictably. Generated sequences achieve high quality as measured by ESM-2 pseudo-perplexity and AlphaFold2 pLDDT scores. ProtNHF provides a flexible, physically interpretable framework for programmable protein sequence generation.
 
