@@ -1,25 +1,97 @@
-# Conditional protein sequence generation and protein editting with Neural Hamiltonian Flows
+# ProtNHF: Neural Hamiltonian Flows for Controllable Protein Sequence Generation
 
-This repository contains a prototype model developed during my postdoctoral research at Oak Ridge National Laboratory with David Rogers. The model explores using Neural Hamiltonian Flows (NHFs) to generate protein sequences. While not yet production- or publication-ready, it demonstrates that this architecture potentially allows conditional protein generation but inducing mutantions on singles residues or groups of residues without having to retrain the base model. This allows for protein/peptide engineering with AI at a very high level.
+by Bharath Raghavan and David M. Rogers
+National Center for Computational Sciences, Oak Ridge National Laboratory, Oak
+Ridge, United States of America
 
-## Introduction
+Controllable protein sequence generation remains a central challenge in computational protein design, as most existing approaches rely on retraining, classifier guidance, or architectural modification to impose conditioning. Here we introduce ProtNHF, a generative model that enables continuous, quantitative control over sequence-level properties through analytical bias functions applied exclusively at inference time. ProtNHF builds on neural Hamiltonian flows, where a lightweight Transformer-based potential energy function, inspired by ESM-2, is combined with an explicit kinetic term to define Hamiltonian dynamics in a continuous relaxation of protein sequence space. The model learns a symplectic transport map from a latent Gaussian distribution to protein sequence embeddings via deterministic leapfrog integration, enabling efficient and expressive sampling. In the unconditional setting, generated sequences achieve competitive quality as measured by ESM-2 pseudo-perplexity and AlphaFold2 pLDDT confidence scores.
 
-Prediciting a protein sequence which would correpsond to a protein with a valid folding pattern is in general a non-trivial task. In recent years, novel neural network architecures combined with generative AI methods like diffusion have lead to multiple AI models that can accurately generate valid protein sequences. Although this in itself has applications in the pharmaceutical and biotech industries, what is really required is a reliable way to generate sequences conditioned on some desired properties (like binding affinity, secondary structure, etc.). Although AI models have been shown to be able to generate protein sequences conditionally, this would often require expensive retraining of the unconditional model to include the desired condition. An improvement to this is the recently published Chroma model. Here a diffusion model is trained to predict protein sequences unconditionally. Conditional generation is achieved by applying external constraints only during the sampling. The work showed that these constraints can be analytical functions or separately trained neural networks.
+A key advantage of the Hamiltonian formulation is its additive energy structure, which permits external bias potentials to be incorporated directly into the Hamiltonian at inference time without modifying or retraining the learned model. This casts controllable generation in a classical molecular modeling paradigm, where desired properties are enforced by explicit energy shaping. We demonstrate smooth, predictable, and approximately monotonic control over amino acid composition and global properties such as net charge by introducing simple analytical bias terms, including residue-specific chemical potentials and harmonic constraints. The bias strength modulates the values of these properties in generated sequences continuously while preserving structural plausibility and diversity. ProtNHF thus provides a flexible base distribution that can be steered toward different compositional regimes using transparent, physically interpretable energy terms, establishing a general framework for inference-time programmable protein sequence generation.
 
-All these models generate protein sequences de novo, i.e., without existing natural templates. However often in the drug design process, what is desired is to generated leads around a specific protein candidate. This means changing one or a number of residues of the protein, without disturbing the overall folding pattern. This sort of 'protein editing' cannot be achieved with current generative AI models. In this work, we show that it is possible to achieve this using NHFs.
+## Installation
 
-NHFs are a type of generative model where Hamiltonian transformations are treated as a normalizing flow. As reported in Souveton et. al. Hamiltonian dynamics have four main advantages that make them ideal for normalizing flows: (i) they are smooth and easily invertible, as one just needs to reverse the timestep to go backward in time; (ii) as symplectic transformations, they are volume-preserving, meaning that their Jacobian determinant is exactly equal to 1; (iii) they have empirically demonstrated their ability to model complex distributions; (iv) they are Physics-inspired, making them highly interpretable in many cases. However, we argue another advantage exists, that makes them particularly relevant to conditional protein generation. This is that biased samples can be generated by just adding a bias energy to the Hamiltonian, similar to how biased MD simulations are performed. During training, a distibution p_θ(x,p) is learnt:
+Clone the repository:
 
-xx
+```
+git clone https://github.com/bharath-raghavan/ProtNHF.git
+cd ProtNHF
+```
 
-We can add a bias U_bias only at generation to get the conditional probaility distribution:
+ProtNHF requires both ProtNHF and `torch-scatter`, making sure the versions match. Instructions for this can be found on the respective websites.
+After that, install ProtNHF:
 
-xx
+```
+pip install -e . # use `-e` for it to be editable locally. 
+```
 
-This allows to generated conditional samples from a model trained only on uncoditionally. This is like Chroma. However, what makes this different is that NHFs, just like any other normalizing flow, is reversible. This means that if we have a protein with sequence embedding x_0, we can run the forward process of the HNF and obtain it equivalent in the latent distribution z. We can then take this latent representation and run the reverse process. Of course, if an unbiased reverse process is performed, we get pack x_0. However, if we include a bias in the reverse process we would obtain a different sequence embedding x_1. This should correspond to the protein with largely a similar structure, and folding pattern as the original protein, except with the bias added. For example, if the bias is a columbic replusion term on the a specific residue X, x_1 would correspon to a protein with a simialr folding pattern as x_0, but avoiding the residue X. This is how the model allows for editing of proteins to generate leads around a specific candidate during a drug design campaign.
+## Running
 
-## Results
+After installing, training can be initiated with:
 
-### Unbiased Model Performance
+```
+protnhf train config.yaml
+```
 
-The first step is to train the model and to evaluate its performance in generating unbiased protein sequences. The primary way we measure the goodness of the generated sequences is with ESM-2 pseudoperplexity and 
+The training requires data parallelism and should be run on an HPC system. An example of running this with a SLURM batch script:
+
+```
+#!/bin/bash
+
+#SBATCH -o %x-%j.out
+#SBATCH --nodes=64
+#SBATCH --gres=gpu:8
+#SBATCH --ntasks-per-node=8
+#SBATCH --cpus-per-task=7
+#SBATCH -t 01:00:00
+
+# load modules
+
+srun python3 protnhf train config.yaml
+```
+Example `YAML` files are given in the `examples/` directory. Required sections are the `model` and `training` sections. The `model` section includes:
+
+* `checkpoint` — path to save or load model weights
+* `dt` — integrator timestep
+* `niter` — number of leapfrog steps
+* `std` - standard deviation of the latent Gaussian distribution
+* `n_types` - Number of classes for embeddings, 20 for proteins
+* `hidden_dims` — hidden size of NHF dynamics
+* `energy.*` — transformer energy model architecture
+
+The `training` section includes:
+* `dataset.file` — path to HDF5 dataset
+* `dataset.batch_size` — training batch size
+* `num_epochs` — number of training epochs
+* `optim.*` — optimizer warmup and cosine scheduler hyperparameters
+
+Sampling is done on a single process with:
+
+```
+protnhf sample config.yaml out.fasta
+```
+
+Again, example `YAML` files are given in the `examples/` directory. Required sections are the `model` and `sample` sections. Furthermore, the path given in `model.checkpoint` given should correpond to a trained model with parameters matching those give in the rest of the `model` section. The `sample` section includes:
+
+* `length` — sequence length
+* `num` — number of sequences to generate of given length
+* `bias` — optional inference-time bias terms
+
+Without the bias section, ProtNHF will generated uncondtional samples. Supported bias types include:
+
+* `coulomb`
+* `gaussian`
+* `restraint`
+* `netchargerestraint`
+
+Each bias term defines:
+`k` — strength of the bias
+
+Additional parameters depending on type (e.g., `target`, `residue`, `sigma`, `i`)
+
+## Citing ProtNHF
+
+If you use ProtNHF in your research, please cite:
+
+XX
+
+## License

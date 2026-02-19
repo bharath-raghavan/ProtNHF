@@ -15,13 +15,13 @@ import torch
 import random
 from torch_scatter import scatter
 
-from protnhf.trainer import DDPTrainer
-from protnhf.config import ConfigParams
-from protnhf.flow import Flow
-from protnhf import metrics
-from protnhf.dataset import decode, Dataset, AA_TO_INDEX, DataLoader
-from protnhf import bias
-from protnhf.sampler import Sampler
+from .trainer import DDPTrainer
+from .config import ConfigParams
+from .flow import Flow
+from . import metrics
+from .dataset import decode, Dataset, AA_TO_INDEX, DataLoader
+from . import bias
+from .sampler import Sampler
 
 from tqdm import tqdm
 
