@@ -4,7 +4,8 @@ import random
 from collections import Counter
 import torch
 import esm
-from .dataset import Data
+from .dataset import Data, AA_TO_INDEX
+from .bias import charge_dict
 
 def reversibilty(model):
     num_points = random.randint(1, 200)
@@ -23,7 +24,7 @@ class ESM2Handle:
         self.model.eval()  # set to evaluation mode
         self.batch_converter = self.alphabet.get_batch_converter()
     
-    def get_pppl(self, seq):
+    def __call__(self, seq):
         # ESM expects (name, sequence) tuples
         data = [("seq1", seq)]
         batch_labels, _, batch_tokens = self.batch_converter(data)
@@ -80,14 +81,8 @@ def seg_low_complexity(seq: str, window: int = 12, entropy_thresh: float = 2.2):
     
     return mask.mean()*100
 
-class NetCharge:
-    def __init__(self, device='cpu'):
-        charge_table_dict = {'A': 0,'C': 0,'D': -1,'E': -1,'F': 0,'G': 0,'H': +0.1,'I': 0,'K': 1,'L': 0,'M': 0,'N':0,'P':0,'Q': 0,'R': 1,'S': 0,'T': 0,'V': 0,'W': 0,'Y': 0}
-        charge_table_idx = {}
-        for key, value in charge_table_dict.items():
-           charge_table_idx[AA_TO_INDEX[key]] = value
-
-        self.charge_table = torch.tensor([v for k, v in sorted(charge_table_idx.items())], device=device)
-
-    def __call__(self, data):
-        return scatter(self.charge_table[data.h], data.batch, dim=0, reduce='sum')                    
+def net_charge(seq):
+    q = 0
+    for aa in seq:
+        q += charge_dict.get(aa.upper(), 0.0)
+    return q              

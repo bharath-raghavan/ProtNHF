@@ -6,7 +6,7 @@ from typing_extensions import Annotated
 
 import numpy as np
 import typer
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 import yaml
 import json
@@ -45,7 +45,7 @@ def sample(config: Annotated[Path, typer.Argument(help="Training parameter yaml 
     esm2hndl = metrics.ESM2Handle()
     
     with open(out, 'w') as f:
-        for seq in tqdm(seqs, desc="Calculating ESM-2 pppl"):
-            f.write(f"{seq},{metrics.seg_low_complexity(seq)},{esm2hndl.get_pppl(seq)}\n")
+        for seq, q in tqdm(zip(seqs, sampler.softmax_net_charge), desc="Calculating ESM-2 pppl"):
+            f.write(f"{seq},{metrics.seg_low_complexity(seq)},{esm2hndl(seq)},{q}\n")
                     
 app()

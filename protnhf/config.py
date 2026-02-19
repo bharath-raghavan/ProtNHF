@@ -2,7 +2,7 @@ from typing import Dict, Optional, Tuple, List
 from pydantic import BaseModel
 import importlib, yaml, json
 from .flow import Flow
-
+    
 class TransformerParams(BaseModel):    
     d_model: int
     ff_dim: int
@@ -47,15 +47,16 @@ class BiasParams(BaseModel):
     type: str
     k: Optional[float] = None
     residue: Optional[str] = None
-    eps: Optional[float] = None
     sigma: Optional[float] = None
-    w: Optional[str] = None
+    i: Optional[int] = None
+    delta: Optional[int] = None
+    target: Optional[int] = None
 
 class SampleParams(BaseModel):
     lengths: Optional[List] = None
     length: Optional[int] = None
     num: Optional[int] = 1
-    bias: Optional[BiasParams] = None
+    bias: Optional[List[BiasParams]] = None
 
 class LinearRegression(BaseModel):
     property: str

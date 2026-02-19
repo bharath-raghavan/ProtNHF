@@ -48,14 +48,15 @@ class DDPTrainer:
         self.model = Flow(config.model.n_types, config.model.hidden_dims, config.model.dt, config.model.niter, config.model.std, config.model.integrator,\
                          config.model.energy.d_model, config.model.energy.ff_dim, config.model.energy.n_heads, config.model.energy.n_layers).to(self.local_rank)
         self.checkpoint_path = config.model.checkpoint
-            
+        
+        self.start_epoch = 0
+        
         if os.path.exists(self.checkpoint_path) and self.checkpoint_path != None:
             checkpoint = torch.load(self.checkpoint_path, weights_only=False)
             self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.start_epoch = checkpoint['epoch']+1
+            if not config.training.optim.override_cpt: self.start_epoch = checkpoint['epoch']+1
         else:
             checkpoint = None
-            self.start_epoch = 0
         
         self.num_epochs = config.training.num_epochs
         

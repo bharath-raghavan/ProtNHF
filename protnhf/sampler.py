@@ -23,12 +23,31 @@ class Sampler:
         if self.nums is None:
             self.nums = [config.sample.length]*config.sample.num
         
-        self.bias_params = config.sample.bias
-        
+        if config.sample.bias is None:
+            self.bias = None
+        else:
+            self.bias = []
+            for bias_params in config.sample.bias:
+                params = bias_params.model_dump()
+                            
+                if params['target'] is None:
+                    aa = torch.tensor([AA_TO_INDEX[params['residue']]])
+                    xO = F.one_hot(aa, num_classes=20).to(torch.float)
+                
+                if params['type'] == 'coulomb':
+                    bias = CoulombBias(params['k'], xO)
+                elif params['type'] == 'gaussian':                
+                    bias = GaussianBias(params['k'], params['sigma'], xO)
+                elif params['type'] == 'positionrestraint':                
+                    bias = PositionRestraint(params['k'], params['i']-1, xO[0])
+                elif params['type'] == 'netchargerestraint':                
+                    bias = NetChargeRestraint(params['k'], params['target'])
+                    
+                self.bias.append(bias)
+            
+            self.bias = CombinedBias(self.bias)
     
     def sample(self):
-        bias_params = None if self.bias_params is None else self.bias_params.model_dump()
-        
         p_list = []
         q_list = []
         batch_list = []
@@ -41,38 +60,17 @@ class Sampler:
         
         p = torch.cat(p_list)
         q = torch.cat(q_list) 
-        batch = torch.cat([batch+i for i, batch in enumerate(batch_list)])
+        batch = torch.cat([batch+i for i, batch in enumerate(batch_list)]) 
         
-        def get_xO():
-            if '+' in bias_params['residue']:
-                xO_list = []
-                for res in  bias_params['residue'].split('+'):
-                    aa = torch.tensor([AA_TO_INDEX[res]])
-                    xO_list.append(F.one_hot(aa, num_classes=20).to(torch.float))
-                xO = torch.cat(xO_list).sum(dim=0)[None, :]
-            else:
-                aa = torch.tensor([AA_TO_INDEX[bias_params['residue']]])
-                xO = F.one_hot(aa, num_classes=20).to(torch.float)
-            
-            return xO
-        
-        def get_seq(p, q, batch, bias=None):
-            with torch.no_grad():
-                logits_combined = self.model.embedd.reverse(self.model.reverse(p, q, batch, bias)[1])
-                num_seq = batch.max().item() + 1
-                logits_set = [
-                    logits_combined[batch == i]
-                    for i in range(num_seq)
-                ]
-                seq = [decode(logits) for logits in logits_set]
+        with torch.no_grad():
+            q_T = self.model.reverse(p, q, batch, self.bias)[1]
+            logits_combined = self.model.embedd.reverse(q_T)
+            self.softmax_net_charge = net_charge(q_T, batch)
+            num_seq = batch.max().item() + 1
+            logits_set = [
+                logits_combined[batch == i]
+                for i in range(num_seq)
+            ]
+            seq = [decode(logits) for logits in logits_set]
 
-            return seq
-        
-        if bias_params is None: return get_seq(p, q, batch)
-        
-        if bias_params['type'] == 'coulomb':
-            bias = CoulombBias(bias_params['k'], get_xO())
-        elif bias_params['type'] == 'gaussian':                
-            bias = GaussianBias(bias_params['k'], bias_params['sigma'], get_xO())
-            
-        return get_seq(p, q, batch, bias)
+        return seq
