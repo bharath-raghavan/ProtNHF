@@ -1,0 +1,31 @@
+model:
+  checkpoint: model.cpt
+  dt: 0.05
+  niter: 4
+  hidden_dims: 128
+  std: 0.7
+  integrator: leapfrog
+  n_types: 20
+  energy:
+    d_model: 320
+    ff_dim: 1280
+    n_heads: 20
+    n_layers: 6
+sample:
+  length: 40
+  num: 500
+  bias:
+    - type: netchargerestraint
+      k: 2000
+      target: -1
+    - type: coulomb
+      k: 2500
+      residue: R
+    - type: gaussian
+      k: 1000
+      residue: L
+      sigma: 1
+    - type: restraint
+      k: 1000
+      residue: M
+      i: 1
