@@ -73,7 +73,7 @@ Sampling is done on a single process with:
 protnhf sample config.yaml out.fasta
 ```
 
-Again, example `YAML` files are given in the `examples/` directory. Required sections are the `model` and `sample` sections. Furthermore, the path given in `model.checkpoint` given should correpond to a trained model with parameters matching those give in the rest of the `model` section. The `sample` section includes:
+Again, example `YAML` files are given in the `examples/` directory. Required sections are the `model` and `sample` sections. The `sample` section includes:
 
 * `length` — sequence length
 * `num` — number of sequences to generate of given length
@@ -91,10 +91,31 @@ Each bias term defines:
 
 Additional parameters depending on type (e.g., `target`, `residue`, `sigma`, `i`)
 
-## Citing ProtNHF
+The model can be specificed in two ways:
+
+1. A locally trained model can be used. In this case, the section follows the exact same format as the discussed for training. The path given in `model.checkpoint` given should correpond to a trained model with parameters matching those give in the rest of the `model` section.
+2. Pretrained models from [the Hugging Face repo](https://huggingface.co/bharathraghavan/ProtNHF) can be used. In this case, all that is required is to set:
+
+* `from_huggingface` - to True
+
+This downloads all model weights and config files automatically. However, it requires the `huggingface_hub` and `safetensors` Python package to be installed.
+
+## Citation
 
 If you use ProtNHF in your research, please cite:
 
-XX
+B. Raghavan and D. M. Rogers  
+**ProtNHF: Neural Hamiltonian Flows for Controllable Protein Sequence Generation**  
+arXiv:xxxx.xxxxx (2026)
+
+```bibtex
+@article{raghavan2026protnhf,
+  title   = {ProtNHF: Neural Hamiltonian Flows for Controllable Protein Sequence Generation},
+  author  = {Raghavan, Bharath and Rogers, David M.},
+  journal = {arXiv preprint arXiv:xxxx.xxxxx},
+  year    = {2026}
+}
 
 ## License
+
+ProtNHF code and model weights are licensed under the BSD-3 license.

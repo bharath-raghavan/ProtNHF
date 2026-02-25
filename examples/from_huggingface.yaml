@@ -1,0 +1,5 @@
+model:
+  from_huggingface: True
+sample:
+  length: 20
+  num: 2
