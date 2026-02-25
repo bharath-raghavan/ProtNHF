@@ -18,11 +18,16 @@ git clone https://github.com/bharath-raghavan/ProtNHF.git
 cd ProtNHF
 ```
 
-ProtNHF requires both ProtNHF and `torch-scatter`, making sure the versions match. Instructions for this can be found on the respective websites.
-After that, install ProtNHF:
+ProtNHF requires both PyTorch and `torch-scatter`, making sure the versions match. It is recommended to install both manually. Instructions for this can be found on the respective websites. After that, install ProtNHF:
 
 ```
-pip install -e . # use `-e` for it to be editable locally. 
+pip install .
+```
+
+To run with pretrained models from [the Hugging Face repo](https://huggingface.co/bharathraghavan/ProtNHF), install ProtNHF like this:
+
+```
+pip install .[hf]
 ```
 
 ## Training

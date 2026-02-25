@@ -30,6 +30,12 @@ dependencies = [
     "typing-extensions>=4.15.0"
 ]
 
+[project.optional-dependencies]
+hf = [
+    "huggingface_hub>=0.20",
+    "safetensors>=0.4"
+]
+
 
 [project.scripts]
 protnhf = "protnhf.__main__:app"
