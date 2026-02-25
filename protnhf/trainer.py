@@ -51,6 +51,9 @@ class DDPTrainer:
         
         self.start_epoch = 0
         
+        if config.model.from_huggingface:
+            if self.world_rank == 0: print("Cannot use model from Hugging Face while training", flush=True)
+        
         if os.path.exists(self.checkpoint_path) and self.checkpoint_path != None:
             checkpoint = torch.load(self.checkpoint_path, weights_only=False)
             self.model.load_state_dict(checkpoint['model_state_dict'])

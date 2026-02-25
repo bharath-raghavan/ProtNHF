@@ -1,4 +1,5 @@
 import os
+import json
 import torch
 import torch.nn.functional as F
 
@@ -11,12 +12,40 @@ from .dataset import decode, AA_TO_INDEX, Data
 class Sampler:
     def __init__(self, config):
         config = ConfigParams.fromFile(config)
-        self.model = Flow(config.model.n_types, config.model.hidden_dims, config.model.dt, config.model.niter, config.model.std, config.model.integrator,\
+        if config.model.from_huggingface:
+            from huggingface_hub import hf_hub_download
+            from safetensors.torch import load_file
+            
+            repo_id = 'bharathraghavan/ProtNHF'
+            
+            config_path = hf_hub_download(
+                repo_id=repo_id,
+                filename="config.json"
+            )
+
+            # Download weights
+            weights_path = hf_hub_download(
+                repo_id=repo_id,
+                filename="model.safetensors"
+            )
+
+            # Load architecture config
+            with open(config_path) as f:
+                arch_config = json.load(f)
+
+            self.model = Flow(arch_config['n_types'], arch_config['hidden_dims'], arch_config['dt'], arch_config['niter'], arch_config['std'], arch_config['integrator'],\
+                                arch_config['energy']['d_model'], arch_config['energy']['ff_dim'], arch_config['energy']['n_heads'], arch_config['energy']['n_layers'])
+
+            state_dict = load_file(weights_path)
+            self.model.load_state_dict(state_dict)
+                    
+        else:
+            self.model = Flow(config.model.n_types, config.model.hidden_dims, config.model.dt, config.model.niter, config.model.std, config.model.integrator,\
                          config.model.energy.d_model, config.model.energy.ff_dim, config.model.energy.n_heads, config.model.energy.n_layers)
-        if os.path.exists(config.model.checkpoint) and config.model.checkpoint != None:
-            checkpoint = torch.load(config.model.checkpoint, weights_only=False)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            print(f"Loading from epoch {checkpoint['epoch']}")
+            if os.path.exists(config.model.checkpoint) and config.model.checkpoint != None:
+                checkpoint = torch.load(config.model.checkpoint, weights_only=False)
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+                print(f"Loading from epoch {checkpoint['epoch']}")
         
         self.nums = config.sample.lengths
         

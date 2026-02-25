@@ -10,14 +10,15 @@ class TransformerParams(BaseModel):
     n_layers: int
                 
 class FlowParams(BaseModel):
-    hidden_dims: int
-    dt: float
-    niter: int
-    std: float
-    integrator: str
-    n_types: int
+    from_huggingface: Optional[bool] = False
+    hidden_dims: Optional[int] = None
+    dt: Optional[float] = None
+    niter: Optional[int] = None
+    std: Optional[float] = None
+    integrator: Optional[str] = None
+    n_types: Optional[int] = None
     checkpoint: Optional[str] = None
-    energy: TransformerParams
+    energy: Optional[TransformerParams] = None
 
 class DatasetParams(BaseModel):
     file: str
