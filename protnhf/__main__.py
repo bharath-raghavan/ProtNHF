@@ -41,11 +41,16 @@ def sample(config: Annotated[Path, typer.Argument(help="Training parameter yaml 
     
     sampler = Sampler(config)
     print("Sampling sequences")
-    seqs = sampler.sample()
     esm2hndl = metrics.ESM2Handle()
     
     with open(out, 'w') as f:
-        for seq, q in tqdm(zip(seqs, sampler.softmax_net_charge), desc="Calculating ESM-2 pppl"):
-            f.write(f"{seq},{metrics.seg_low_complexity(seq)},{esm2hndl(seq)},{q}\n")
+        if sampler.return_charge:
+            seqs, qs = sampler.sample()
+            for seq, q in tqdm(zip(seqs, qs), desc="Calculating ESM-2 pppl"):
+                f.write(f"{seq},{metrics.seg_low_complexity(seq)},{esm2hndl(seq)},{q}\n")
+        else:
+            seqs = sampler.sample()
+            for seq in tqdm(seqs, desc="Calculating ESM-2 pppl"):
+                f.write(f"{seq},{metrics.seg_low_complexity(seq)},{esm2hndl(seq)}\n")
                     
 app()

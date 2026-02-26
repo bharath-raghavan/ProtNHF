@@ -52,6 +52,8 @@ class Sampler:
         if self.nums is None:
             self.nums = [config.sample.length]*config.sample.num
         
+        self.return_charge = False
+        
         if config.sample.bias is None:
             self.bias = None
         else:
@@ -71,6 +73,7 @@ class Sampler:
                     bias = PositionRestraint(params['k'], params['i']-1, xO[0])
                 elif params['type'] == 'netchargerestraint':                
                     bias = NetChargeRestraint(params['k'], params['target'])
+                    self.return_charge = True
                     
                 self.bias.append(bias)
             
@@ -94,12 +97,14 @@ class Sampler:
         with torch.no_grad():
             q_T = self.model.reverse(p, q, batch, self.bias)[1]
             logits_combined = self.model.embedd.reverse(q_T)
-            self.softmax_net_charge = net_charge(q_T, batch)
+            
             num_seq = batch.max().item() + 1
             logits_set = [
                 logits_combined[batch == i]
                 for i in range(num_seq)
             ]
             seq = [decode(logits) for logits in logits_set]
-
-        return seq
+        if self.return_charge:
+            return seq, net_charge(q_T, batch)
+        else:
+            return seq
