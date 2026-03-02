@@ -120,6 +120,7 @@ arXiv:xxxx.xxxxx (2026)
   journal = {arXiv preprint arXiv:xxxx.xxxxx},
   year    = {2026}
 }
+```
 
 ## License
 
