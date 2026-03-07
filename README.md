@@ -111,14 +111,16 @@ If you use ProtNHF in your research, please cite:
 
 B. Raghavan and D. M. Rogers  
 **ProtNHF: Neural Hamiltonian Flows for Controllable Protein Sequence Generation**  
-arXiv:xxxx.xxxxx (2026)
+bioRxiv (2026). https://doi.org/10.64898/2026.03.04.709305
 
 ```bibtex
 @article{raghavan2026protnhf,
   title   = {ProtNHF: Neural Hamiltonian Flows for Controllable Protein Sequence Generation},
   author  = {Raghavan, Bharath and Rogers, David M.},
-  journal = {arXiv preprint arXiv:xxxx.xxxxx},
-  year    = {2026}
+  journal = {bioRxiv},
+  year    = {2026},
+  doi     = {10.64898/2026.03.04.709305},
+  url     = {https://doi.org/10.64898/2026.03.04.709305}
 }
 ```
 
